@@ -1,0 +1,38 @@
+const THEME = {
+  bg: "#F0F7F0",
+  bgGradientStart: "#E8F5E9",
+  bgGradientEnd: "#FFFDE7",
+  card: "#FFFFFF",
+  green: "#2E7D32",
+  greenLight: "#4CAF50",
+  greenPale: "#C8E6C9",
+  greenAccent: "#00C853",
+  orange: "#FF6F00",
+  orangeLight: "#FFB300",
+  black: "#1B2E1B",
+  gray: "#9E9E9E",
+  grayLight: "#F5F5F5",
+  white: "#FFFFFF",
+  boardLine: "#A5D6A7",
+  boardBg: "#B5874A",
+  boardBgLight: "#C49550",
+  shadow: "rgba(46,125,50,0.15)",
+  shadowDark: "rgba(0,0,0,0.2)",
+  ai: "#6A1B9A",
+  aiLight: "#AB47BC",
+  aiPale: "#E1BEE7",
+  text: "#1B2E1B",
+  textMuted: "#757575",
+  border: "#C8E6C9",
+};
+
+export default {
+  light: {
+    text: THEME.black,
+    background: THEME.bg,
+    tint: THEME.green,
+    tabIconDefault: THEME.gray,
+    tabIconSelected: THEME.green,
+  },
+  theme: THEME,
+};
