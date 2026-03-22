@@ -25,7 +25,7 @@ import {
 
 const T = Colors.theme;
 const SCREEN_W = Dimensions.get("window").width;
-const CELL_SIZE = 24;
+const CELL_SIZE = Math.max(42, Math.floor(SCREEN_W / 10));
 const EXPAND_BY = 5;
 const MAX_EXPANSIONS = 4;
 
@@ -266,6 +266,29 @@ export default function JeuDesPointsScreen() {
   const p1Name = "Joueur 1";
   const p2Name = "Joueur 2";
 
+  const renderPlayerCard = (p: number) => {
+    const active = currentPlayer === p && !gameOver;
+    const color = p === PLAYER_1 ? T.green : T.orange;
+    const name = p === PLAYER_1 ? p1Name : p2Name;
+    return (
+      <View style={[
+        { borderRadius: 14, padding: 12, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: T.card, borderWidth: 2, borderColor: T.greenPale, marginBottom: 12 },
+        active && { backgroundColor: color + "10", borderColor: color },
+      ]}>
+        <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2.5, backgroundColor: color, borderColor: active ? T.white : "transparent" }} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 13, fontWeight: "800", color: T.black }}>{name}</Text>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: T.gray, marginTop: 2 }}>{scores[p]} point(s) capturé(s)</Text>
+        </View>
+        {active && (
+          <View style={{ flexDirection: "row", gap: 4 }}>
+            {[0, 1, 2].map(i => <View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color, opacity: 0.4 + i * 0.3 }} />)}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.root, { backgroundColor: T.bg }]}>
       <ScrollView
@@ -291,29 +314,8 @@ export default function JeuDesPointsScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Score panel */}
-        <View style={styles.scorePanel}>
-          {[PLAYER_1, PLAYER_2].map((p, i) => {
-            const isActive = currentPlayer === p && !gameOver;
-            const color = p === PLAYER_1 ? T.green : T.orange;
-            const name = p === PLAYER_1 ? p1Name : p2Name;
-            return (
-              <React.Fragment key={p}>
-                {i === 1 && (
-                  <View style={styles.scoreSep}>
-                    <Text style={styles.scoreSepText}>VS</Text>
-                  </View>
-                )}
-                <View style={[styles.scoreCard, isActive && { borderColor: color, backgroundColor: color + "12" }]}>
-                  {isActive && <View style={[styles.scoreActiveBar, { backgroundColor: color }]} />}
-                  <View style={[styles.scoreDot, { backgroundColor: color }]} />
-                  <Text style={styles.scoreName}>{name}</Text>
-                  <Text style={[styles.scoreValue, { color }]}>{scores[p]}</Text>
-                </View>
-              </React.Fragment>
-            );
-          })}
-        </View>
+        {/* Player 2 (Top) */}
+        {renderPlayerCard(PLAYER_2)}
 
         {/* Expansion notice */}
         {expandNotice && (
@@ -389,6 +391,11 @@ export default function JeuDesPointsScreen() {
             />
           </View>
         </ScrollView>
+
+        {/* Player 1 (Bottom) */}
+        <View style={{ marginTop: 2, marginBottom: 12 }}>
+          {renderPlayerCard(PLAYER_1)}
+        </View>
 
         {/* Expansion count info */}
         {expansionCount > 0 && !gameOver && (

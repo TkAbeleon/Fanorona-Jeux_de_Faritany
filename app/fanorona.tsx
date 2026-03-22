@@ -27,12 +27,15 @@ const T = Colors.theme;
 const SCREEN_W = Dimensions.get("window").width;
 
 // ── Rendering constants (UI only, not logic) ────────────────────────────────
-const CELL = Math.min(34, Math.floor((SCREEN_W - 40) / (COLS - 1)));
+// The board is logically ROWS(5) x COLS(9). We rotate 90 degrees visually.
+// So width relies on ROWS(5) and height relies on COLS(9).
+const CELL = Math.min(65, Math.floor((SCREEN_W - 40) / (ROWS - 1)));
 const PAD = CELL / 2;
-const BOARD_W = PAD * 2 + CELL * (COLS - 1);
-const BOARD_H = PAD * 2 + CELL * (ROWS - 1);
-const cx = (c: number) => PAD + c * CELL;
-const cy = (r: number) => PAD + r * CELL;
+const BOARD_W = PAD * 2 + CELL * (ROWS - 1);
+const BOARD_H = PAD * 2 + CELL * (COLS - 1);
+// Map r (0..4) -> X axis, c (0..8) -> Y axis
+const cx = (r: number) => PAD + r * CELL;
+const cy = (c: number) => PAD + c * CELL;
 
 // ── Board SVG View ───────────────────────────────────────────────────────────
 function BoardView({
@@ -57,7 +60,7 @@ function BoardView({
       if (!inB(nr, nc)) continue;
       lines.push(
         <Line key={`l${r}${c}${dr}${dc}`}
-          x1={cx(c)} y1={cy(r)} x2={cx(nc)} y2={cy(nr)}
+          x1={cx(r)} y1={cy(c)} x2={cx(nr)} y2={cy(nc)}
           stroke={T.boardLine} strokeWidth={1.5}
         />
       );
@@ -72,13 +75,13 @@ function BoardView({
     const isLast = lastMoved && lastMoved[0] === r && lastMoved[1] === c;
     const handlePress = () => !aiThinking && onCellClick(r, c);
 
-    if (isSel) cells.push(<Circle key={`sr${i}`} cx={cx(c)} cy={cy(r)} r={CELL * 0.55} fill={T.green} fillOpacity={0.2} />);
+    if (isSel) cells.push(<Circle key={`sr${i}`} cx={cx(r)} cy={cy(c)} r={CELL * 0.55} fill={T.green} fillOpacity={0.2} />);
     if (isValid && !piece) cells.push(
-      <Circle key={`v${i}`} cx={cx(c)} cy={cy(r)} r={CELL * 0.28} fill={T.green} fillOpacity={0.5}
+      <Circle key={`v${i}`} cx={cx(r)} cy={cy(c)} r={CELL * 0.28} fill={T.green} fillOpacity={0.5}
         stroke={T.green} strokeWidth={1.5} onPress={handlePress} />
     );
     if (isCap) cells.push(
-      <Circle key={`cp${i}`} cx={cx(c)} cy={cy(r)} r={CELL * 0.36} fill={T.orange} fillOpacity={0.25}
+      <Circle key={`cp${i}`} cx={cx(r)} cy={cy(c)} r={CELL * 0.36} fill={T.orange} fillOpacity={0.25}
         stroke={T.orange} strokeWidth={2} />
     );
 
@@ -89,23 +92,23 @@ function BoardView({
       const strokeC = isSel ? T.orange : isLast ? "#FFCC80" : isP1 ? "#E64A19" : "#424242";
       cells.push(
         <G key={`pc${i}`} onPress={handlePress}>
-          <Circle cx={cx(c) + 1.5} cy={cy(r) + 2.5} r={CELL * 0.44} fill="rgba(0,0,0,0.15)" />
-          <Circle cx={cx(c)} cy={cy(r)} r={CELL * 0.44} fill={fill}
+          <Circle cx={cx(r) + 1.5} cy={cy(c) + 2.5} r={CELL * 0.44} fill="rgba(0,0,0,0.15)" />
+          <Circle cx={cx(r)} cy={cy(c)} r={CELL * 0.44} fill={fill}
             stroke={strokeC} strokeWidth={isSel || isLast ? 3 : 1.8} />
-          <Circle cx={cx(c) - CELL * 0.13} cy={cy(r) - CELL * 0.13} r={CELL * 0.12} fill="rgba(255,255,255,0.4)" />
-          {isLast && <Circle cx={cx(c)} cy={cy(r)} r={CELL * 0.5} fill="none" stroke={T.orangeLight} strokeWidth={2} strokeDasharray="4,3" />}
+          <Circle cx={cx(r) - CELL * 0.13} cy={cy(c) - CELL * 0.13} r={CELL * 0.12} fill="rgba(255,255,255,0.4)" />
+          {isLast && <Circle cx={cx(r)} cy={cy(c)} r={CELL * 0.5} fill="none" stroke={T.orangeLight} strokeWidth={2} strokeDasharray="4,3" />}
         </G>
       );
     } else if (!isValid) {
       cells.push(
-        <Circle key={`d${i}`} cx={cx(c)} cy={cy(r)} r={3} fill={T.boardLine}
+        <Circle key={`d${i}`} cx={cx(r)} cy={cy(c)} r={3} fill={T.boardLine}
           onPress={handlePress} />
       );
     }
 
     // Invisible touch target for the whole cell
     cells.push(
-      <Circle key={`hit${i}`} cx={cx(c)} cy={cy(r)} r={CELL * 0.5}
+      <Circle key={`hit${i}`} cx={cx(r)} cy={cy(c)} r={CELL * 0.5}
         fill="transparent" onPress={handlePress} />
     );
   }
@@ -399,6 +402,36 @@ export default function FanoronaScreen() {
   const isAiP = (p: number) => gameMode === "hva" && p === AI_P;
   const activeBg = (p: number) => p === 1 ? "#BF360C" : "#2a2a2a";
 
+  const renderPlayerCard = (p: 1 | 2) => {
+    const active = turn === p && !winner;
+    return (
+      <View style={[
+        styles.playerCard,
+        active && { backgroundColor: activeBg(p), borderColor: "transparent" },
+      ]}>
+        <View style={[styles.playerDot, {
+          backgroundColor: p === 1 ? "#BF360C" : "#424242",
+          borderColor: active ? T.white : p === 1 ? "#FFCC80" : "#757575",
+        }]} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.playerName, active && { color: T.white }]}>
+            {p === 1 ? "Joueur 1" : isAiP(2) ? "IA" : "Joueur 2"}
+          </Text>
+          <Text style={[styles.playerPieces, active && { color: "rgba(255,255,255,0.7)" }]}>
+            {p === 1 ? p1c : p2c} pièces
+          </Text>
+        </View>
+        {active && aiThinking && (
+          <View style={styles.thinkingDots}>
+            {[0, 1, 2].map(i => (
+              <View key={i} style={[styles.thinkingDot, { opacity: 0.4 + i * 0.3 }]} />
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.root, { backgroundColor: T.bg }]}>
       <ScrollView
@@ -421,37 +454,9 @@ export default function FanoronaScreen() {
           </View>
         </View>
 
-        {/* Player cards */}
-        <View style={styles.playerRow}>
-          {([1, 2] as const).map(p => {
-            const active = turn === p && !winner;
-            return (
-              <View key={p} style={[
-                styles.playerCard,
-                active && { backgroundColor: activeBg(p), borderColor: "transparent" },
-              ]}>
-                <View style={[styles.playerDot, {
-                  backgroundColor: p === 1 ? "#BF360C" : "#424242",
-                  borderColor: active ? T.white : p === 1 ? "#FFCC80" : "#757575",
-                }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.playerName, active && { color: T.white }]}>
-                    {p === 1 ? "Joueur 1" : isAiP(2) ? "IA" : "Joueur 2"}
-                  </Text>
-                  <Text style={[styles.playerPieces, active && { color: "rgba(255,255,255,0.7)" }]}>
-                    {p === 1 ? p1c : p2c} pièces
-                  </Text>
-                </View>
-                {active && aiThinking && (
-                  <View style={styles.thinkingDots}>
-                    {[0, 1, 2].map(i => (
-                      <View key={i} style={[styles.thinkingDot, { opacity: 0.4 + i * 0.3 }]} />
-                    ))}
-                  </View>
-                )}
-              </View>
-            );
-          })}
+        {/* Player 2 (Top) */}
+        <View style={{ marginBottom: 12 }}>
+          {renderPlayerCard(2)}
         </View>
 
         {/* Status */}
@@ -500,6 +505,11 @@ export default function FanoronaScreen() {
               <Text style={styles.newGameBtnText}>Fin du tour</Text>
             </TouchableOpacity>
           )}
+        </View>
+
+        {/* Player 1 (Bottom) */}
+        <View style={{ marginBottom: 14 }}>
+          {renderPlayerCard(1)}
         </View>
 
         {/* Legend */}
