@@ -14,6 +14,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, {
   Line, Circle, Rect, G, Defs, RadialGradient, Stop,
 } from "react-native-svg";
+import { Audio } from "expo-av";
 
 import Colors from "@/constants/colors";
 import {
@@ -186,8 +187,35 @@ export default function JeuDesPointsScreen() {
   const [gameOver, setGameOver] = useState(false);
   const [lastCapture, setLastCapture] = useState<{ player: number; count: number } | null>(null);
   const [expandNotice, setExpandNotice] = useState<string | null>(null);
+  const [bgMusic, setBgMusic] = useState<Audio.Sound | null>(null);
 
   const boardScrollRef = useRef<ScrollView>(null);
+
+  React.useEffect(() => {
+    async function initAudio() {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          require('../assets/audio/bg-music.mp3'),
+          { isLooping: true, volume: 0.25 }
+        );
+        setBgMusic(sound);
+        await sound.playAsync();
+      } catch (e) {}
+    }
+    initAudio();
+    return () => { bgMusic?.unloadAsync(); };
+  }, []);
+
+  const playSfx = async (type: 'move' | 'capture') => {
+    try {
+      const file = type === 'move' ? require('../assets/audio/move.mp3') : require('../assets/audio/capture.mp3');
+      const { sound } = await Audio.Sound.createAsync(file, { volume: 0.8 });
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((s) => {
+        if (s.isLoaded && s.didJustFinish) sound.unloadAsync();
+      });
+    } catch(e) {}
+  };
 
   const winner = !gameOver ? null
     : scores[PLAYER_1] > scores[PLAYER_2] ? PLAYER_1
@@ -200,6 +228,9 @@ export default function JeuDesPointsScreen() {
 
     const result = processMoveN(board, capturedBy, currentPlayer, r, c, gridSize);
     const { newBoard, newCapturedBy, newLines, pointsCaptured, isFull } = result;
+
+    if (pointsCaptured > 0) playSfx('capture');
+    else playSfx('move');
 
     // Update scores first
     const newScores = { ...scores };

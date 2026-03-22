@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Svg, { Line, Circle, G, Defs, RadialGradient, Stop } from "react-native-svg";
+import { Audio } from "expo-av";
 
 import Colors from "@/constants/colors";
 import {
@@ -47,11 +48,21 @@ function BoardView({
   validMoves: [number,number][];
   captureChoices: [number,number][];
   lastMoved: [number,number] | null;
+  pendingAiMove: Move | null;
   onCellClick: (r:number,c:number) => void;
   aiThinking: boolean;
   gameMode: string;
 }) {
   const lines: React.ReactNode[] = [];
+  if (pendingAiMove) {
+    lines.push(
+      <Line key="ai-pend-line"
+        x1={cx(pendingAiMove.fromR)} y1={cy(pendingAiMove.fromC)}
+        x2={cx(pendingAiMove.toR)} y2={cy(pendingAiMove.toC)}
+        stroke={T.ai} strokeWidth={4} strokeDasharray="6,4"
+      />
+    );
+  }
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
     for (const [dr, dc] of DIRS) {
       if (dr < 0 || (dr === 0 && dc < 0)) continue;
@@ -85,6 +96,13 @@ function BoardView({
         stroke={T.orange} strokeWidth={2} />
     );
 
+    const isAiPendingFrom = pendingAiMove && pendingAiMove.fromR === r && pendingAiMove.fromC === c;
+    const isAiPendingTo = pendingAiMove && pendingAiMove.toR === r && pendingAiMove.toC === c;
+
+    if (isAiPendingFrom || isAiPendingTo) {
+      cells.push(<Circle key={`ai-pend${i}`} cx={cx(r)} cy={cy(c)} r={CELL * 0.45} fill={T.ai} fillOpacity={0.4} />);
+    }
+
     if (piece) {
       const isP1 = piece === 1;
       const isAI = gameMode === "hva" && !isP1;
@@ -92,11 +110,11 @@ function BoardView({
       const strokeC = isSel ? T.orange : isLast ? "#FFCC80" : isP1 ? "#E64A19" : "#424242";
       cells.push(
         <G key={`pc${i}`} onPress={handlePress}>
-          <Circle cx={cx(r) + 1.5} cy={cy(c) + 2.5} r={CELL * 0.44} fill="rgba(0,0,0,0.15)" />
-          <Circle cx={cx(r)} cy={cy(c)} r={CELL * 0.44} fill={fill}
+          <Circle cx={cx(r) + 1.5} cy={cy(c) + 2.5} r={CELL * 0.35} fill="rgba(0,0,0,0.15)" />
+          <Circle cx={cx(r)} cy={cy(c)} r={CELL * 0.35} fill={fill}
             stroke={strokeC} strokeWidth={isSel || isLast ? 3 : 1.8} />
-          <Circle cx={cx(r) - CELL * 0.13} cy={cy(c) - CELL * 0.13} r={CELL * 0.12} fill="rgba(255,255,255,0.4)" />
-          {isLast && <Circle cx={cx(r)} cy={cy(c)} r={CELL * 0.5} fill="none" stroke={T.orangeLight} strokeWidth={2} strokeDasharray="4,3" />}
+          <Circle cx={cx(r) - CELL * 0.10} cy={cy(c) - CELL * 0.10} r={CELL * 0.09} fill="rgba(255,255,255,0.4)" />
+          {isLast && <Circle cx={cx(r)} cy={cy(c)} r={CELL * 0.42} fill="none" stroke={T.orangeLight} strokeWidth={2} strokeDasharray="4,3" />}
         </G>
       );
     } else if (!isValid) {
@@ -158,6 +176,8 @@ export default function FanoronaScreen() {
   const [winner, setWinner] = useState<number | null>(null);
   const [scores, setScores] = useState<[number,number]>([0, 0]);
   const [aiThinking, setAiThinking] = useState(false);
+  const [pendingAiMove, setPendingAiMove] = useState<Move | null>(null);
+  const [bgMusic, setBgMusic] = useState<Audio.Sound | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const AI_P = 2;
@@ -165,6 +185,33 @@ export default function FanoronaScreen() {
   const p1c = count(board, 1), p2c = count(board, 2);
   const curBoard = multiCapState ? multiCapState.board : board;
   const dispBoard = phase === "capture-choice" ? board : curBoard;
+
+  // ── Audio effect ────────────────────────────────────────────────────────
+  useEffect(() => {
+    async function initAudio() {
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          require('../assets/audio/bg-music.mp3'),
+          { isLooping: true, volume: 0.25 }
+        );
+        setBgMusic(sound);
+        await sound.playAsync();
+      } catch (e) {}
+    }
+    initAudio();
+    return () => { bgMusic?.unloadAsync(); };
+  }, []);
+
+  const playSfx = async (type: 'move' | 'capture') => {
+    try {
+      const file = type === 'move' ? require('../assets/audio/move.mp3') : require('../assets/audio/capture.mp3');
+      const { sound } = await Audio.Sound.createAsync(file, { volume: 0.8 });
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((s) => {
+        if (s.isLoaded && s.didJustFinish) sound.unloadAsync();
+      });
+    } catch(e) {}
+  };
 
   // ── AI effect ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -174,10 +221,16 @@ export default function FanoronaScreen() {
     setStatusType("ai");
     timerRef.current = setTimeout(() => {
       const move = getBestMove(board, AI_P, difficulty);
-      setAiThinking(false);
-      if (!move) { doEndTurn(board); return; }
-      doAiMove(board, move, null);
-    }, 700);
+      if (!move) { setAiThinking(false); doEndTurn(board); return; }
+      
+      setPendingAiMove(move);
+      playSfx('move');
+      timerRef.current = setTimeout(() => {
+        setPendingAiMove(null);
+        setAiThinking(false);
+        doAiMove(board, move, null);
+      }, 700);
+    }, 500);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [turn, phase, isAiTurn]);
 
@@ -186,12 +239,22 @@ export default function FanoronaScreen() {
     setAiThinking(true);
     timerRef.current = setTimeout(() => {
       const moves = generateMoves(multiCapState.board, AI_P, multiCapState);
-      setAiThinking(false);
-      if (!moves.length) { doEndTurn(multiCapState.board); return; }
+      if (!moves.length) { setAiThinking(false); doEndTurn(multiCapState.board); return; }
       let best: Move | null = null, bv = -Infinity;
       moves.forEach(m => { const v = neuralEval(m.board, AI_P); if (v > bv) { bv = v; best = m; } });
-      if (best) doAiMove(multiCapState.board, best, multiCapState);
-    }, 500);
+      
+      if (best) {
+        setPendingAiMove(best);
+        playSfx('move');
+        timerRef.current = setTimeout(() => {
+          setPendingAiMove(null);
+          setAiThinking(false);
+          doAiMove(multiCapState.board, best!, multiCapState);
+        }, 600);
+      } else {
+        setAiThinking(false); doEndTurn(multiCapState.board);
+      }
+    }, 400);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [phase, multiCapState, isAiTurn]);
 
@@ -260,6 +323,9 @@ export default function FanoronaScreen() {
   }
 
   function finalize(nb: number[], toR: number, toC: number, fromR: number, fromC: number, caps: [number,number][], capType: string, prevMs: MultiState | null = null) {
+    if (caps.length > 0) playSfx('capture');
+    else if (turn === 1) playSfx('move'); // AI already played move sound in timeout
+
     setCaptureChoices([]); setLastMoved([toR, toC]);
     const opp = turn === 1 ? 2 : 1;
     if (count(nb, opp) === 0) {
@@ -484,6 +550,7 @@ export default function FanoronaScreen() {
             validMoves={validMoves}
             captureChoices={captureChoices}
             lastMoved={lastMoved}
+            pendingAiMove={pendingAiMove}
             onCellClick={handleCellClick}
             aiThinking={aiThinking}
             gameMode={gameMode}
