@@ -40,7 +40,7 @@ const cy = (c: number) => PAD + c * CELL;
 
 // ── Board SVG View ───────────────────────────────────────────────────────────
 function BoardView({
-  board, selected, validMoves, captureChoices, lastMoved,
+  board, selected, validMoves, captureChoices, lastMoved, pendingAiMove,
   onCellClick, aiThinking, gameMode,
 }: {
   board: number[];
